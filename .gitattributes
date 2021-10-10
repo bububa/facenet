@@ -1,0 +1,2 @@
+core/cascade/* filter=lfs diff=lfs merge=lfs -text
+core/casscade/*/* filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package core;
+option go_package = "../core";
+
+message People {
+    repeated Person list = 1;
+}
+
+message Person {
+    string name = 1;
+    message Embedding {
+        repeated float value = 1; 
+    };
+    repeated Embedding embeddings = 2;
+    repeated float center = 3;
+    double radius = 4;
+    double collision_radius = 5;
+}

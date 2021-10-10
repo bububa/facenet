@@ -1,0 +1,51 @@
+name: Go
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout github repo (+ download lfs dependencies)
+      uses: actions/checkout@v2
+      with:
+        lfs: true
+
+    - name: Checkout LFS objects
+      run: git lfs checkout
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.17
+
+    - name: Build
+      run: |
+        mkdir -p tensorflow
+        cd tensorflow
+        TFLIB=libtensorflow-cpu-linux-x86_64-1.15.0.tar.gz
+        curl -ksLO https://storage.googleapis.com/tensorflow/libtensorflow/$TFLIB
+        tar xfz $TFLIB
+        export LD_LIBRARY_PATH=$PWD/lib
+        export LIBRARY_PATH=$PWD/lib
+        cd ../
+        make
+        go build -tags=jpeg,linux -v ./...
+
+    - name: Test
+      run: |
+        mkdir -p tensorflow
+        cd tensorflow
+        TFLIB=libtensorflow-cpu-linux-x86_64-1.15.0.tar.gz
+        curl -ksLO https://storage.googleapis.com/tensorflow/libtensorflow/$TFLIB
+        tar xfz $TFLIB
+        export LD_LIBRARY_PATH=$PWD/lib
+        export LIBRARY_PATH=$PWD/lib
+        cd ../
+        make
+        go test -v ./...
