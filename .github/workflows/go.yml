@@ -49,5 +49,5 @@ jobs:
         cd ../
         make
         mkdir models/facenet
-        curl -ksLO https://drive.google.com/file/d/1NKG2C1ig36CCU9K1jfAX5jT7abQeJo9T/view?usp=sharing
+        curl -o models/facenet/saved_model.pb https://models-tf.oss-cn-beijing.aliyuncs.com/facenet/saved_model.pb 
         go test -v ./...
