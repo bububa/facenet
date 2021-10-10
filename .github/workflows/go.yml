@@ -48,4 +48,6 @@ jobs:
         export LIBRARY_PATH=$PWD/lib
         cd ../
         make
+        mkdir models/facenet
+        curl -ksLO https://drive.google.com/file/d/1NKG2C1ig36CCU9K1jfAX5jT7abQeJo9T/view?usp=sharing
         go test -v ./...
