@@ -20,6 +20,8 @@ const (
 	TooFarMatchErr
 	// CollisionMatchErr match distance is larger than collision radius, may need more trainning data
 	CollisionMatchErr
+	// NothingMatchErr represents nothing matched
+	NothingMatchErr
 )
 
 // Error custom error object

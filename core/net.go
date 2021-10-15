@@ -1,7 +1,10 @@
 package core
 
 import (
+	"bytes"
+	"errors"
 	"image"
+	"image/jpeg"
 	"math"
 	"path"
 	"sync"
@@ -35,7 +38,7 @@ func (t *Net) DetectMultiple(img image.Image, minSize int) (faces Faces, err err
 		return faces, err
 	}
 
-	if err = t.loadModel(); err != nil {
+	if err = t.LoadModel(); err != nil {
 		return faces, err
 	}
 	for i, face := range faces {
@@ -56,7 +59,7 @@ func (t *Net) DetectSingle(img image.Image, minSize int) (face Face, err error) 
 		return face, err
 	}
 
-	if err = t.loadModel(); err != nil {
+	if err = t.LoadModel(); err != nil {
 		return face, err
 	}
 	thumb := imageutil.Thumb(src, face.CropArea(), CropSize)
@@ -79,7 +82,7 @@ func (t *Net) Detect(img image.Image, minSize int, expected int) (faces Faces, e
 		return faces, nil
 	}
 
-	if err = t.loadModel(); err != nil {
+	if err = t.LoadModel(); err != nil {
 		return faces, err
 	}
 
@@ -118,7 +121,7 @@ func (t *Net) ModelLoaded() bool {
 	return t.model != nil
 }
 
-func (t *Net) loadModel() error {
+func (t *Net) LoadModel() error {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
@@ -143,7 +146,8 @@ func (t *Net) loadModel() error {
 }
 
 func (t *Net) getEmbeddings(img image.Image) ([][]float32, error) {
-	tensor, err := imageToTensor(img, CropSize.Width, CropSize.Height, true)
+	tensor, err := makeTensorFromImage(img, CropSize.Width, CropSize.Height)
+	//tensor, err := imageToTensor(img, CropSize.Width, CropSize.Height)
 
 	if err != nil {
 		// log.Printf("faces: failed to convert image to tensor: %v\n", err)
@@ -176,11 +180,11 @@ func (t *Net) getEmbeddings(img image.Image) ([][]float32, error) {
 	return output[0].Value().([][]float32), nil
 }
 
-func imageToTensor(img image.Image, imageHeight, imageWidth int, preWhiten bool) (tfTensor *tf.Tensor, err error) {
+/*
+func imageToTensor(img image.Image, imageHeight, imageWidth int) (tfTensor *tf.Tensor, err error) {
 	if imageHeight <= 0 || imageWidth <= 0 {
 		return tfTensor, NewError(ImageToTensorSizeErr, "image width and height must be > 0")
 	}
-
 	var tfImage [1][][][3]float32
 
 	for j := 0; j < imageHeight; j++ {
@@ -195,9 +199,6 @@ func imageToTensor(img image.Image, imageHeight, imageWidth int, preWhiten bool)
 			tfImage[0][j][i][2] = convertValue(b)
 		}
 	}
-	if !preWhiten {
-		return tf.NewTensor(tfImage)
-	}
 	// pre whiten image
 	mean, std := meanStd(tfImage[0])
 	tensor, err := tf.NewTensor(tfImage)
@@ -205,6 +206,58 @@ func imageToTensor(img image.Image, imageHeight, imageWidth int, preWhiten bool)
 		return nil, err
 	}
 	return preWhitenImage(tensor, mean, std)
+}
+*/
+
+func makeTensorFromImage(img image.Image, imageWidth int, imageHeight int) (*tf.Tensor, error) {
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		return nil, err
+	}
+	tensor, err := tf.NewTensor(buf.String())
+	if err != nil {
+		return nil, err
+	}
+	graph, input, output, err := makeTransformImageGraph(int32(imageWidth), int32(imageHeight))
+	if err != nil {
+		return nil, err
+	}
+	session, err := tf.NewSession(graph, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+	out, err := session.Run(
+		map[tf.Output]*tf.Tensor{input: tensor},
+		[]tf.Output{output},
+		nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(out) < 1 || len(out[0].Value().([][][][]float32)) < 1 {
+		return nil, errors.New("invalid output")
+	}
+	mean, std := meanStd(out[0].Value().([][][][]float32)[0])
+	return preWhitenImage(out[0], mean, std)
+}
+
+// Creates a graph to decode, rezise and normalize an image
+func makeTransformImageGraph(width int32, height int32) (graph *tf.Graph, input, output tf.Output, err error) {
+	s := op.NewScope()
+	input = op.Placeholder(s, tf.String)
+	// Decode PNG or JPEG
+	decode := op.DecodeJpeg(s, input, op.DecodeJpegChannels(3))
+	// Div and Sub perform (value-Mean)/Scale for each pixel
+	output = op.ResizeBilinear(s,
+		// Create a batch containing a single image
+		op.ExpandDims(s,
+			// Use decoded pixel values
+			op.Cast(s, decode, tf.Float),
+			op.Const(s.SubScope("make_batch"), int32(0))),
+		op.Const(s.SubScope("size"), []int32{height, width}),
+	)
+	graph, err = s.Finalize()
+	return graph, input, output, err
 }
 
 func preWhitenImage(img *tf.Tensor, mean, std float32) (*tf.Tensor, error) {
@@ -239,7 +292,7 @@ func convertValue(value uint32) float32 {
 	return (float32(value>>8) - float32(127.5)) / float32(127.5)
 }
 
-func meanStd(img [][][3]float32) (mean float32, std float32) {
+func meanStd(img [][][]float32) (mean float32, std float32) {
 	count := len(img) * len(img[0]) * len(img[0][0])
 	for _, x := range img {
 		for _, y := range x {
