@@ -11,13 +11,13 @@ import (
 
 // JPEG handler.
 type JPEG struct {
-	ins *facenet.Instance
+	e   *facenet.Estimator
 	cam *camera.Camera
 }
 
 // NewJPEG returns new JPEG handler.
-func NewJPEG(ins *facenet.Instance, cam *camera.Camera) *JPEG {
-	return &JPEG{ins, cam}
+func NewJPEG(e *facenet.Estimator, cam *camera.Camera) *JPEG {
+	return &JPEG{e, cam}
 }
 
 // ServeHTTP handles requests on incoming connections.
@@ -36,9 +36,9 @@ func (s *JPEG) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("jpeg: read: %v", err)
 		return
 	}
-	if s.ins != nil {
-		if markers, err := s.ins.DetectFaces(img, DetectMinSize); err == nil {
-			img = s.ins.DrawMarkers(markers, TextColor, SuccessColor, FailedColor, StrokeWidth, false)
+	if s.e != nil {
+		if markers, err := s.e.DetectFaces(img, DetectMinSize); err == nil {
+			img = s.e.DrawMarkers(markers, TextColor, SuccessColor, FailedColor, StrokeWidth, false)
 		}
 	}
 

@@ -14,7 +14,7 @@ import (
 // Server represents server
 type Server struct {
 	srv         *http.Server
-	net         *facenet.Instance
+	e           *facenet.Estimator
 	cam         *camera.Camera
 	delay       int
 	bind        string
@@ -23,10 +23,10 @@ type Server struct {
 }
 
 // New returns new Server for binding address, facenet instance and camera
-func New(bind string, net *facenet.Instance, cam *camera.Camera) *Server {
+func New(bind string, e *facenet.Estimator, cam *camera.Camera) *Server {
 	s := &Server{
 		srv:         new(http.Server),
-		net:         net,
+		e:           e,
 		cam:         cam,
 		bind:        bind,
 		frameWidth:  FrameWidth,
@@ -69,9 +69,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) ListenAndServe() error {
 	http.Handle("/html/webgl", handlers.NewHTML(s.frameWidth, s.frameHeight, true))
 	http.Handle("/html", handlers.NewHTML(s.frameWidth, s.frameHeight, false))
-	http.Handle("/jpeg", handlers.NewJPEG(s.net, s.cam))
-	http.Handle("/mjpeg", handlers.NewMJPEG(s.net, s.cam, s.delay))
-	http.Handle("/socket", handlers.NewSocket(s.net, s.cam, s.delay))
+	http.Handle("/jpeg", handlers.NewJPEG(s.e, s.cam))
+	http.Handle("/mjpeg", handlers.NewMJPEG(s.e, s.cam, s.delay))
+	http.Handle("/socket", handlers.NewSocket(s.e, s.cam, s.delay))
 
 	http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

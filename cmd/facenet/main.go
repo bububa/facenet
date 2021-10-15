@@ -11,6 +11,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/llgcode/draw2d"
 
@@ -20,10 +21,10 @@ import (
 
 // Request request options
 type Request struct {
-	// Net facenet model path
-	Net string
-	// People people model path
-	People string
+	// Model facenet model path
+	Model string
+	// DB path
+	DB string
 	// Train train images folder path
 	Train string
 	// Output output file/folder path
@@ -43,8 +44,8 @@ var (
 func init() {
 	flag.StringVar(&request.Train, "train", "", "train file path")
 	flag.StringVar(&request.Output, "output", "", "output file path for detect result checking")
-	flag.StringVar(&request.Net, "net", "", "facenet model file path")
-	flag.StringVar(&request.People, "people", "", "people model file")
+	flag.StringVar(&request.Model, "model", "", "facenet model file path")
+	flag.StringVar(&request.DB, "db", "", "db file")
 	flag.StringVar(&request.Font, "font", "", "font path")
 	flag.StringVar(&deleteAction, "delete", "", "delete person, multiple names are separated by comma")
 	flag.StringVar(&updateAction, "update", "", "delete person, multiple names are separated by comma")
@@ -59,16 +60,16 @@ func main() {
 		log.Fatalln(err)
 	}
 	var opts []facenet.Option
-	if request.People == "" {
-		log.Fatalln("[ERR] missing people model file path")
+	if request.DB == "" {
+		log.Fatalln("[ERR] missing db file path")
 	}
-	request.People = cleanPath(wd, request.People)
-	opts = append(opts, facenet.WithPeople(request.People))
-	if request.Net == "" && !infoAction {
+	request.DB = cleanPath(wd, request.DB)
+	opts = append(opts, facenet.WithDB(request.DB))
+	if request.Model == "" && !infoAction {
 		log.Fatalln("[ERR] missing facenet model file path")
 	} else {
-		request.Net = cleanPath(wd, request.Net)
-		opts = append(opts, facenet.WithNet(request.Net))
+		request.Model = cleanPath(wd, request.Model)
+		opts = append(opts, facenet.WithModel(request.Model))
 	}
 	if request.Font != "" {
 		request.Font = cleanPath(wd, request.Font)
@@ -103,7 +104,7 @@ func main() {
 			}
 			log.Printf("[WRN] person: %s not found\n", label)
 		}
-		err := instance.SaveModel(request.People)
+		err := instance.SaveDB(request.DB)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -154,41 +155,76 @@ func main() {
 		}
 	}
 
+	var labelPathes []string
 	if err := filepath.Walk(request.Train, func(labelPath string, info fs.FileInfo, err error) error {
 		label := filepath.Base(labelPath)
 		if !info.IsDir() || trainPathBase == label {
 			return nil
 		}
-		label = strings.TrimSpace(label)
-		if _, found := updateLabels[label]; !found && updateAction != "" {
-			return nil
-		}
-		person := core.Person{
-			Name: label,
-		}
-		err = filepath.Walk(labelPath, func(filename string, info fs.FileInfo, err error) error {
-			if info.IsDir() {
-				return nil
-			}
-			return extractPerson(instance, filename, &person, request.Output)
-		})
-		if err != nil {
-			return err
-		}
-		log.Printf("[INFO] person: %s, embeddings: %d\n", person.GetName(), len(person.Embeddings))
-		if len(person.GetEmbeddings()) > 0 {
-			instance.AddPerson(&person)
-		}
+		labelPathes = append(labelPathes, labelPath)
 		return nil
 	}); err != nil {
 		log.Fatalln(err)
 	}
-	if err := instance.SaveModel(request.People); err != nil {
+	wg := new(sync.WaitGroup)
+	for _, labelPath := range labelPathes {
+		label := filepath.Base(labelPath)
+		label = strings.TrimSpace(label)
+		if _, found := updateLabels[label]; !found && updateAction != "" {
+			continue
+		}
+		wg.Add(1)
+		go func(ins *facenet.Estimator, label string, labelPath string, output string) {
+			defer wg.Done()
+			extractPersonInFolder(ins, label, labelPath, output)
+		}(instance, label, labelPath, request.Output)
+	}
+	wg.Wait()
+
+	instance.BatchTrain(0.75, 1000, 20, 4)
+	if err := instance.SaveDB(request.DB); err != nil {
 		log.Fatalln(err)
 	}
 }
 
-func extractPerson(ins *facenet.Instance, filename string, person *core.Person, thumbPath string) error {
+func extractPersonInFolder(ins *facenet.Estimator, label string, labelPath string, output string) error {
+	var filenames []string
+	if err := filepath.Walk(labelPath, func(filename string, info fs.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+		filenames = append(filenames, filename)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if len(filenames) == 0 {
+		return nil
+	}
+	person := core.Person{
+		Name: label,
+	}
+	wg := new(sync.WaitGroup)
+	locker := new(sync.Mutex)
+	for _, filename := range filenames {
+		fname := filename
+		wg.Add(1)
+		go func(ins *facenet.Estimator, person *core.Person) {
+			defer wg.Done()
+			locker.Lock()
+			defer locker.Unlock()
+			extractPerson(ins, fname, person, output)
+		}(ins, &person)
+	}
+	wg.Wait()
+	log.Printf("[INFO] person: %s, embeddings: %d\n", person.GetName(), len(person.Embeddings))
+	if len(person.GetEmbeddings()) > 0 {
+		ins.AddPersonSafe(&person)
+	}
+	return nil
+}
+
+func extractPerson(ins *facenet.Estimator, filename string, person *core.Person, thumbPath string) error {
 	label := person.GetName()
 	baseName := filepath.Base(filename)
 	img, err := loadImage(filename)
@@ -196,7 +232,7 @@ func extractPerson(ins *facenet.Instance, filename string, person *core.Person, 
 		log.Printf("[ERR] loadimage label:%s, file:%s, %v\n", label, baseName, err)
 		return nil
 	}
-	marker, err := ins.ExtractFace(person, img, 20)
+	marker, err := ins.ExtractFaceSafe(person, img, 20)
 	if err != nil {
 		log.Printf("[ERR] label:%s, file:%s, %v\n", label, baseName, err)
 		return nil

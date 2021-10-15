@@ -16,14 +16,14 @@ import (
 
 // Socket handler.
 type Socket struct {
-	ins   *facenet.Instance
+	e     *facenet.Estimator
 	cam   *camera.Camera
 	delay int
 }
 
 // NewSocket returns new socket handler.
-func NewSocket(ins *facenet.Instance, cam *camera.Camera, delay int) *Socket {
-	return &Socket{ins, cam, delay}
+func NewSocket(e *facenet.Estimator, cam *camera.Camera, delay int) *Socket {
+	return &Socket{e, cam, delay}
 }
 
 // ServeHTTP handles requests on incoming connections.
@@ -42,9 +42,9 @@ func (s *Socket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Printf("jpeg: read: %v", err)
 			return
 		}
-		if s.ins != nil {
-			if markers, err := s.ins.DetectFaces(img, DetectMinSize); err == nil {
-				img = s.ins.DrawMarkers(markers, TextColor, SuccessColor, FailedColor, StrokeWidth, false)
+		if s.e != nil {
+			if markers, err := s.e.DetectFaces(img, DetectMinSize); err == nil {
+				img = s.e.DrawMarkers(markers, TextColor, SuccessColor, FailedColor, StrokeWidth, false)
 			}
 		}
 

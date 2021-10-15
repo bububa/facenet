@@ -13,6 +13,7 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/llgcode/draw2d v0.0.0-20210904075650-80aa0a2a901d
 	github.com/montanaflynn/stats v0.6.6
+	github.com/patrikeh/go-deep v0.0.0-20191210195838-b811ffc4083e
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/tensorflow/tensorflow v1.15.5
 	google.golang.org/protobuf v1.27.1

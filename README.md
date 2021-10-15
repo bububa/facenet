@@ -34,7 +34,7 @@ go get -u github.com/bububa/facenet
 ### Train faces
 
 ```bash
-./bin/facenet -net=./models/facenet -people=./models/people/people.pb -train={image folder for training} -output={fold path for output thumbs(optional)}
+./bin/facenet -model=./models/facenet -db=./models/people.db -train={image folder for training} -output={fold path for output thumbs(optional)}
 ```
 
 the train folder include folders which name is the label with images inside
@@ -42,19 +42,19 @@ the train folder include folders which name is the label with images inside
 ### Update distinct labels
 
 ```bash
-./bin/facenet -net=./models/facenet -people=./models/people/people.pb -update={labels for update seperated by comma} -output={fold path for output thumbs(optional)}
+./bin/facenet -model=./models/facenet -db=./models/people.db -update={labels for update seperated by comma} -output={fold path for output thumbs(optional)}
 ```
 
 ### Delete distinct labels from people model
 
 ```bash
-./bin/facenet -net=./models/facenet -people=./models/people/people.pb -delete={labels for delete seperated by comma} -output={fold path for output thumbs(optional)}
+./bin/facenet -model=./models/facenet -db=./models/people.db -delete={labels for delete seperated by comma} -output={fold path for output thumbs(optional)}
 ```
 
 ### Detect faces for image
 
 ```bash
-./bin/facenet -net=./models/facenet -people=./models/people/people.pb -detect={the image file path for detecting} -font={font folder for output image(optional)} -output={fold path for output thumbs(optional)}
+./bin/facenet -model=./models/facenet -db=./models/people.db -detect={the image file path for detecting} -font={font folder for output image(optional)} -output={fold path for output thumbs(optional)}
 ```
 
 ## Camera & Server
@@ -99,6 +99,10 @@ Usage of camera:
 	Frame height (default 480)
   -index int
 	Camera index
+  -model string
+    saved_mode path
+  -db string
+    classifier db
 ```
 
 ## User as lib
@@ -113,15 +117,15 @@ import (
 )
 
 func main() {
-    instance, err := facenet.New(
-        facenet.WithNet("./models/facenet"),
-        facenet.WithPeople("./models/people/people.pb"),
+    estimator, err := facenet.New(
+        facenet.WithModel("./models/facenet"),
+        facenet.WithDB("./models/people.db"),
         facenet.WithFontPath("./font"),
     )
     if err != nil {
        log.Fatalln(err)
     }
-	err = instance.SetFont(&draw2d.FontData{
+	err = estimator.SetFont(&draw2d.FontData{
 		Name: "NotoSansCJKsc",
 		//Name:   "Roboto",
 		Family: draw2d.FontFamilySans,
@@ -135,13 +139,13 @@ func main() {
     {
         labels := []string{"xxx", "yyy"}
         for _, label := range labels {
-            if deleted := instance.DeletePerson(label); deleted {
+            if deleted := estimator.DeletePerson(label); deleted {
                 log.Printf("[INFO] person: %s deleted\n", label)
                 continue
             }
             log.Printf("[WRN] person: %s not found\n", label)
         }
-        err := instance.SaveModel(request.People)
+        err := estimator.SaveDB("./models/people.db")
         if err != nil {
             log.Fatalln(err)
         }
@@ -168,7 +172,7 @@ func main() {
             failedColor := "#F44336"
             strokeWidth := 2
             successMarkerOnly := false
-			markerImg := instance.DrawMarkers(markers, txtColor, successColor, failedColor, 2, successMarkerOnly)
+			markerImg := estimator.DrawMarkers(markers, txtColor, successColor, failedColor, 2, successMarkerOnly)
 			if err := saveImage(markerImg, outputPath); err != nil {
 				log.Fatalln(err)
 			}

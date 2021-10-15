@@ -15,14 +15,14 @@ import (
 
 // MJPEG handler.
 type MJPEG struct {
-	ins   *facenet.Instance
+	e     *facenet.Estimator
 	cam   *camera.Camera
 	delay int
 }
 
 // NewMJPEG returns new MJPEG handler.
-func NewMJPEG(ins *facenet.Instance, cam *camera.Camera, delay int) *MJPEG {
-	return &MJPEG{ins, cam, delay}
+func NewMJPEG(e *facenet.Estimator, cam *camera.Camera, delay int) *MJPEG {
+	return &MJPEG{e, cam, delay}
 }
 
 // ServeHTTP handles requests on incoming connections.
@@ -62,9 +62,9 @@ loop:
 				log.Printf("jpeg: read: %v", err)
 				return
 			}
-			if s.ins != nil {
-				if markers, err := s.ins.DetectFaces(img, DetectMinSize); err == nil {
-					img = s.ins.DrawMarkers(markers, TextColor, SuccessColor, FailedColor, StrokeWidth, false)
+			if s.e != nil {
+				if markers, err := s.e.DetectFaces(img, DetectMinSize); err == nil {
+					img = s.e.DrawMarkers(markers, TextColor, SuccessColor, FailedColor, StrokeWidth, false)
 				}
 			}
 

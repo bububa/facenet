@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"image"
 
 	"github.com/bububa/facenet/imageutil"
@@ -55,7 +56,8 @@ func (fm FaceMarkers) Draw(font *imageutil.Font, txtColor string, successColor s
 		}
 		imageutil.DrawRectangle(i, area, color, "", strokeWidth)
 		if m.label != "" && font != nil {
-			imageutil.DrawLabel(i, font, m.label, image.Pt(area.Min.X, area.Max.Y), txtColor, color, scales)
+			label := fmt.Sprintf("%s:%.4f", m.Label(), m.Distance())
+			imageutil.DrawLabel(i, font, label, image.Pt(area.Min.X, area.Max.Y), txtColor, color, scales)
 		}
 	}
 	return i

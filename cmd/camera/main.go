@@ -21,12 +21,12 @@ import (
 )
 
 var (
-	opts       camera.Options
-	net        *facenet.Instance
-	bind       string
-	netPath    string
-	peoplePath string
-	fontPath   string
+	opts      camera.Options
+	estimator *facenet.Estimator
+	bind      string
+	modelPath string
+	dbPath    string
+	fontPath  string
 )
 
 func init() {
@@ -35,8 +35,8 @@ func init() {
 	flag.Float64Var(&opts.Width, "width", 640, "Frame width")
 	flag.Float64Var(&opts.Height, "height", 480, "Frame height")
 	flag.StringVar(&bind, "bind", ":56000", "set server bind")
-	flag.StringVar(&netPath, "net", "", "set facenet model path")
-	flag.StringVar(&peoplePath, "people", "", "set people model path")
+	flag.StringVar(&modelPath, "model", "", "set facenet model path")
+	flag.StringVar(&dbPath, "db", "", "set db path")
 	flag.StringVar(&fontPath, "font", "", "set font path")
 }
 
@@ -46,18 +46,18 @@ func setup() error {
 	if err != nil {
 		return err
 	}
-	netPath = cleanPath(wd, netPath)
-	peoplePath = cleanPath(wd, peoplePath)
+	modelPath = cleanPath(wd, modelPath)
+	dbPath = cleanPath(wd, dbPath)
 	fontPath = cleanPath(wd, fontPath)
-	net, err = facenet.New(
-		facenet.WithNet(netPath),
-		facenet.WithPeople(peoplePath),
+	estimator, err = facenet.New(
+		facenet.WithModel(modelPath),
+		facenet.WithDB(dbPath),
 		facenet.WithFontPath(fontPath),
 	)
 	if err != nil {
 		return err
 	}
-	if err := net.SetFont(&draw2d.FontData{
+	if err := estimator.SetFont(&draw2d.FontData{
 		Name: "NotoSansCJKsc",
 		//Name:   "Roboto",
 		Family: draw2d.FontFamilySans,
@@ -80,7 +80,7 @@ func main() {
 	}
 	log.Println("starting server...")
 	cam := camera.NewCamera(device)
-	srv := server.New(bind, net, cam)
+	srv := server.New(bind, estimator, cam)
 	srv.SetFrameSize(opts.Width, opts.Height)
 	srv.SetDelay(opts.Delay)
 

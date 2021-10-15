@@ -22,6 +22,8 @@ const (
 	CollisionMatchErr
 	// NothingMatchErr represents nothing matched
 	NothingMatchErr
+	// UnknownClassifierErr represents met an unknown classifier in saved db
+	UnknownClassifierErr
 )
 
 // Error custom error object
